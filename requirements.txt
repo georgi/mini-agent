@@ -1,0 +1,14 @@
+# Core dependencies
+openai>=1.0.0
+anthropic>=0.11.0
+ollama>=0.1.0
+python-dotenv>=1.0.0
+requests>=2.31.0
+
+# Optional dependencies for specific tools
+playwright>=1.40.0  # For BrowserTool
+serpapi>=0.1.0      # For GoogleSearchTool
+
+# Development dependencies
+black>=23.0.0       # Code formatting
+pytest>=7.0.0       # Testing 
