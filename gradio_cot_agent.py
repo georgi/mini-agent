@@ -215,8 +215,101 @@ def initialize_agent(provider_type, model_name, max_steps):
     class GradioCoTAgent(CoTAgent):
         def solve_problem_with_gradio(self, problem, history, progress=None):
             """Version of solve_problem that updates a Gradio progress component and streams output"""
-            result = super().solve_problem(problem, history)
-            yield result
+            messages = []
+
+            # Add user message
+            messages.append(ChatMessage(role="user", content=problem))
+            yield messages
+
+            thinking_content = ""
+            current_tool = None
+
+            for step_data in super().solve_problem(problem, history):
+                for message in step_data:
+                    for content in message["content"]:
+                        if "text" in content:
+                            messages.append(
+                                ChatMessage(
+                                    role="assistant",
+                                    content=content["text"],
+                                    metadata={
+                                        "title": "🧠 Thinking",
+                                        "status": "pending",
+                                    },
+                                )
+                            )
+
+                        elif "tool_call" in content:
+                            # Tool is being called - create a new tool section
+                            tool_name = content["tool_call"]["name"]
+                            tool_input = content["tool_call"]["input"]
+
+                            tool_call_msg = f"Tool: {tool_name}\nInput: {json.dumps(tool_input, indent=2)}"
+
+                            messages.append(
+                                ChatMessage(
+                                    role="assistant",
+                                    content=tool_call_msg,
+                                    metadata={
+                                        "title": f"🔧 Using {tool_name}",
+                                        "status": "pending",
+                                    },
+                                )
+                            )
+
+                        # elif "tool_result" in content:
+                        #     # Update the tool message with the result
+                        #     tool_result = content["tool_result"]
+
+                        #     # Find the last tool message to update
+                        #     for i in range(len(messages) - 1, -1, -1):
+                        #         if (
+                        #             messages[i].role == "assistant"
+                        #             and "title" in (messages[i].metadata or {})
+                        #             and messages[i]
+                        #             .metadata["title"]
+                        #             .startswith("🔧 Using")
+                        #         ):
+                        #             tool_content = (
+                        #                 messages[i].content
+                        #                 + f"\n\nResult:\n{tool_result}"
+                        #             )
+                        #             messages[i] = ChatMessage(
+                        #                 role="assistant",
+                        #                 content=tool_content,
+                        #                 metadata={
+                        #                     "title": messages[i].metadata["title"],
+                        #                     "status": "done",
+                        #                 },
+                        #             )
+                        #             break
+
+                # Mark previous thinking as done when moving to next step
+                for i in range(len(messages) - 1, -1, -1):
+                    if (
+                        messages[i].role == "assistant"
+                        and "title" in (messages[i].metadata or {})
+                        and messages[i].metadata["title"] == "🧠 Thinking"
+                        and messages[i].metadata["status"] == "pending"
+                    ):
+                        messages[i] = ChatMessage(
+                            role="assistant",
+                            content=messages[i].content,
+                            metadata={"title": "🧠 Thinking", "status": "done"},
+                        )
+                        break
+
+                yield messages
+
+            # Final answer - add as a regular message without metadata
+            if thinking_content:
+                # Add a final answer that summarizes the findings
+                final_answer = (
+                    "Based on my analysis:\n\n"
+                    + thinking_content.split("\nFinal Answer:")[-1].strip()
+                )
+                messages.append(ChatMessage(role="assistant", content=final_answer))
+                yield messages
 
     return GradioCoTAgent(
         provider=provider,
@@ -235,18 +328,21 @@ def solve_problem(problem, history, progress=gr.Progress()):
         agent = initialize_agent(global_provider, global_model, int(global_max_steps))
 
         # Solve the problem with streaming
-        for output in agent.solve_problem_with_gradio(problem, history, progress):
-            yield output
+        messages = []
+        for updated_messages in agent.solve_problem_with_gradio(
+            problem, history, progress
+        ):
+            messages = updated_messages
+            yield messages
     except Exception as e:
         print(e)
         traceback.print_exc()
-        error_html = f"""
-        <div style="color: red; padding: 10px; border: 1px solid red; border-radius: 5px;">
-            <h3>Error</h3>
-            <p>{str(e)}</p>
-        </div>
-        """
-        yield error_html
+        messages = []
+        messages.append(ChatMessage(role="user", content=problem))
+        messages.append(
+            ChatMessage(role="assistant", content=f"I encountered an error: {str(e)}")
+        )
+        yield messages
 
 
 # Create functions to update global variables
@@ -332,6 +428,12 @@ with gr.Blocks(css=custom_css) as demo:
             chat_interface = gr.ChatInterface(
                 solve_problem,
                 description="Ask a complex question and watch the agent think through it step by step.",
+                chatbot=gr.Chatbot(
+                    type="messages",  # Important for using ChatMessage
+                    render_markdown=True,
+                    bubble_full_width=False,
+                    show_copy_button=True,
+                ),
             )
 
         with gr.Tab("Settings"):

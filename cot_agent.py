@@ -21,7 +21,8 @@ Features:
 """
 
 import datetime
-import sys  # System-specific parameters and functions
+import sys
+import traceback  # System-specific parameters and functions
 import dotenv  # For loading environment variables from a .env file
 import json  # For JSON serialization/deserialization
 import os  # For interacting with the operating system and environment variables
@@ -88,6 +89,15 @@ class CoTAgent:
                   +-------------------------------------------+
                   |
                   v
+    +---------------------------+
+    | Planning Phase            |
+    | - Analyze problem         |
+    | - Break into sub-problems |
+    | - Create solution plan    |
+    | - Identify needed tools   |
+    +---------------------------+
+                  |
+                  v
     +---------------------------+     +----------------------+
     | Response Analysis         | <-- | Tool Execution       |
     | - Check for tool calls    | --> | (if needed)          |
@@ -112,13 +122,18 @@ class CoTAgent:
     Flow Process:
     1. User provides a problem/question
     2. Agent builds initial prompt with CoT instructions
-    3. LLM provider processes the prompt
-    4. Agent analyzes response for:
+    3. Language model begins with planning phase:
+       - Analyze and understand the problem
+       - Break it down into sub-problems
+       - Create a specific execution plan
+       - Identify tools that might be needed
+    4. LLM provider processes the prompt
+    5. Agent analyzes response for:
        - Tool calls (executes if needed)
        - Extract reasoning steps
        - Check for final answer indication
-    5. If reasoning is incomplete, repeat steps 3-4
-    6. Once complete, extract and return final answer
+    6. If reasoning is incomplete, repeat steps 4-5
+    7. Once complete, extract and return final answer
     """
 
     def __init__(self, provider, tools=None, max_steps=10, prompt_builder=None):
@@ -140,7 +155,9 @@ class CoTAgent:
         self.system_prompt = f"""
         You are a helpful AI assistant that solves problems using step-by-step reasoning.
         Today is {datetime.datetime.now().strftime("%Y-%m-%d")}.
-        You think step by step and provide a final answer.
+        You first create a clear plan before execution.
+        You think step by step through both planning and execution phases.
+        You provide a final answer after completing your reasoning.
         Optimize for speed and efficiency.
         """
         self.chat_history = []  # Store all chat interactions for reference
@@ -162,12 +179,18 @@ class CoTAgent:
         return (
             f"Problem to solve: {problem}\n\n"
             "Approach:\n"
-            "1. Analyze problem, identify key components, and develop strategy\n"
-            "2. Work through solution step-by-step with clear reasoning\n"
-            "3. Use tools when needed (state which tool and why)\n"
-            "4. When complete, provide: Final Answer: [concise solution]\n"
-            "5. End with empty content to signal completion\n\n"
-            "Begin your reasoning now."
+            "1. Planning Phase:\n"
+            "   a. Analyze problem and identify key components\n"
+            "   b. Break down the problem into sub-problems\n"
+            "   c. Create a specific plan with clear steps for solving each sub-problem\n"
+            "   d. Identify potential tools needed for execution\n"
+            "2. Execution Phase:\n"
+            "   a. Follow your plan step-by-step with clear reasoning\n"
+            "   b. Adjust the plan if needed based on new insights\n"
+            "   c. Use tools when needed (state which tool and why)\n"
+            "3. When complete, provide: Final Answer: [concise solution]\n"
+            "4. End with empty content to signal completion\n\n"
+            "Begin your planning and reasoning now."
         )
 
     def solve_problem(self, problem, show_thinking=False):
@@ -205,6 +228,7 @@ class CoTAgent:
             messages = self.provider.chat(messages=self.history, tools=self.tools)
             self.history.extend(messages)
             agent_finished = False
+            yield messages
 
             # Display thinking steps if enabled
             if show_thinking:
@@ -250,25 +274,24 @@ class CoTAgent:
 
         messages = self.provider.chat(messages=self.history, tools=self.tools)
         self.history.extend(messages)
-
         # Handle different content structures from various providers
         content = messages[0]["content"]
-
-        # Handle Anthropic's content block array format
-        if isinstance(content, list):
-            result = ""
-            for block in content:
-                if isinstance(block, dict) and block.get("type") == "text":
-                    result += block.get("text", "")
-                elif isinstance(block, dict) and "text" in block:
-                    result += block["text"]
-            return result
-        # Handle simple text content (OpenAI style)
-        elif isinstance(content, dict) and "text" in content:
-            return content["text"]
-        # Handle plain string content
-        else:
-            return content
+        yield messages
+        # # Handle Anthropic's content block array format
+        # if isinstance(content, list):
+        #     result = ""
+        #     for block in content:
+        #         if isinstance(block, dict) and block.get("type") == "text":
+        #             result += block.get("text", "")
+        #         elif isinstance(block, dict) and "text" in block:
+        #             result += block["text"]
+        #     return result
+        # # Handle simple text content (OpenAI style)
+        # elif isinstance(content, dict) and "text" in content:
+        #     return content["text"]
+        # # Handle plain string content
+        # else:
+        #     return content
 
     def execute_tool(self, tool_name, tool_args):
         """
@@ -594,9 +617,15 @@ Current configuration: Provider: {self.current_provider_name}, Model: {self.curr
                     animation_thread.start()
 
                 # Solve the problem
-                answer = self.agent.solve_problem(
+                for messages in self.agent.solve_problem(
                     user_input, show_thinking=self.show_thinking
-                )
+                ):
+                    for message in messages:
+                        for content in message["content"]:
+                            if "text" in content:
+                                print(content["text"])
+                            elif "tool_result" in content:
+                                print(content["tool_result"])
 
                 # Stop the animation if it was running
                 if (
@@ -611,10 +640,6 @@ Current configuration: Provider: {self.current_provider_name}, Model: {self.curr
                     # Reset animation state for next query
                     animation_stop_event.clear()
                     animation_thread = None
-
-                # Display the answer
-                print("\nAnswer:")
-                print(answer)
 
             except KeyboardInterrupt:
                 # Also stop animation on keyboard interrupt
@@ -641,6 +666,7 @@ Current configuration: Provider: {self.current_provider_name}, Model: {self.curr
                     animation_stop_event.clear()
                     animation_thread = None
                 print(f"\nError: {e}")
+                traceback.print_exc()
 
 
 # Example Usage

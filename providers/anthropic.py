@@ -60,7 +60,6 @@ class AnthropicProvider(LLMProvider):
 
     def chat(self, messages, tools=[]):
         # Create message with tools if provided
-        print(f"Messages: {messages}")
         if tools:
             response = self.client.messages.create(
                 model=self.model_name,
