@@ -167,41 +167,27 @@ The CoT Agent is built with a modular architecture consisting of:
 graph TD
     User([User]) --> |Problem/Question| CoT[CoT Agent]
 
-    subgraph "CoT Agent Core"
+    subgraph "Chain of Thought Process"
         CoT --> |Formats Prompt| Init[Initialize Conversation]
         Init --> Loop[Reasoning Loop]
-        Loop --> |Step N| Provider
-        Provider --> Loop
-        Loop --> |Tool Call| Tools
-        Tools --> Loop
+        Loop --> |Generate Step| Think[Think About Problem]
+        Think --> |Make Decision| Decision{Need Tool?}
+        Decision -->|Yes| ToolUse[Use Tool]
+        ToolUse --> |Tool Result| Loop
+        Decision -->|No| Continue[Continue Reasoning]
+        Continue --> Loop
         Loop --> |Final Step| Extract[Extract Answer]
         Extract --> |Final Answer| User
     end
 
-    subgraph "LLM Providers"
-        Provider{LLM Provider} --> OpenAI[OpenAI Provider]
-        Provider --> Anthropic[Anthropic Provider]
-        Provider --> Ollama[Ollama Provider]
-    end
-
-    subgraph "Tools"
-        Tools{Available Tools} --> Math[Calculator Tool]
-        Tools --> Web[Browser Tool]
-        Tools --> Shell[Execute Shell Tool]
-        Tools --> Files[File Read Tool]
-        Tools --> Google[Google Search Tool]
-        Google --> Finance[Google Finance]
-        Google --> Flights[Google Flights]
-        Google --> News[Google News]
-    end
-
     style CoT fill:#f9d5e5,stroke:#333,stroke-width:2px
-    style Provider fill:#eeeeee,stroke:#333,stroke-width:1px
-    style Tools fill:#eeeeee,stroke:#333,stroke-width:1px
     style User fill:#d5f9e8,stroke:#333,stroke-width:2px
+    style Think fill:#e8f9d5,stroke:#333,stroke-width:1px
+    style Decision fill:#d5e8f9,stroke:#333,stroke-width:1px
+    style ToolUse fill:#f9e8d5,stroke:#333,stroke-width:1px
 ```
 
-## 🌟 Advanced Examples
+## �� Advanced Examples
 
 ### Multi-Tool Problem Solving
 
