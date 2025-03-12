@@ -1,0 +1,5 @@
+anthropic_model: claude-3-7-sonnet-20250219
+max_steps: 10
+ollama_model: llama3.2
+openai_model: gpt-4o
+provider: anthropic
