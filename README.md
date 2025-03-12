@@ -1,10 +1,10 @@
 # 🧠 Chain of Thought (CoT) Agent
 
-> **A flexible, multi-provider Chain of Thought reasoning framework with tool-calling capabilities**
+![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Status](https://img.shields.io/badge/status-awesome-orange)
 
-<p align="center">
-  <img src="https://i.imgur.com/eYcAAhP.png" alt="Chain of Thought Agent Concept" width="600"/>
-</p>
+> **A flexible, multi-provider Chain of Thought reasoning framework with tool-calling capabilities**
 
 ## 🚀 Overview
 
